@@ -5,6 +5,7 @@ from CoolProp.CoolProp import PropsSI
 sys.path.append('D:\\01_Projects\\2021년 스마트플랫폼과제\\1단계\\STED_source\\Level 2')
 from VCHP_layout import VCHP
 from HP_dataclass import ProcessFluid, Settings, Outputs
+import time
 
 ref_list = ['Ammonia','CO2','Ethane','Ethylene','IsoButane','Isopentane','Propylene','R11','R113','R114','R115','R116','R12','R123','R1233zd(E)','R1234yf','R1234ze(E)','R1234ze(Z)','R124','R1243zf','R125','R13','R134a','R13I1','R14','R141b','R142b','R143a','R152A','R161','R21','R218','R22','R227EA','R23','R236EA','R236FA','R245ca','R245fa','R32','R365MFC','R40','R404A','R407C','R41','R410A','R507A','RC318','Water','n-Butane','n-Pentane','n-Propane']
 Tcrt_list = [405.4, 304.1282, 305.322, 282.35, 407.817, 460.35, 364.211, 471.06, 487.21, 418.83, 353.1, 293.03, 385.12, 456.831, 439.6, 367.85, 382.52, 423.27, 395.425, 376.93, 339.173, 301.88, 374.21, 396.44, 227.51, 477.5, 410.26, 345.857, 386.411, 375.25, 451.48, 345.02, 369.295, 374.9, 299.293, 412.44, 398.07, 447.57, 427.01, 351.255, 460.0, 416.3, 345.27, 359.345, 317.28, 344.494, 343.765, 388.38, 647.096, 425.125, 469.7, 369.89]
@@ -22,9 +23,9 @@ for j in range(2):
     inputs = Settings()
     inputs.second = 'process'
     inputs.cycle = 'vcc'
-    inputs.layout = 'bas' if j == 0- else 'ihx'
-    inputs.cond_N_row = 1
-    inputs.evap_N_row = 1
+    inputs.layout = 'bas' if j == 0 else 'ihx'
+    inputs.cond_N_row = 3
+    inputs.evap_N_row = 3
     inputs.cond_N_element = 20
     inputs.evap_N_element = 20
     inputs.expand_eff = 0.0
@@ -36,9 +37,9 @@ for j in range(2):
         file_name = 'IHX_DB.csv'
     elif inputs.layout == 'inj':
         file_name = 'INJ_DB.csv'
-
-    
-    for i in range(50000):
+        
+    start = time.time()
+    for i in range(25000):
         fluid_h = random()
         fluid_c = random()
 
@@ -112,22 +113,24 @@ for j in range(2):
             OutEvap = ProcessFluid(Y={Y_c:1.0,}, m = 0.0, T = Tco, p = Pc)
             vchp = VCHP(InCond, OutCond, InEvap, OutEvap, inputs)
             
-            
             try:
                 (InCond, OutCond, InEvap, OutEvap, InCond_REF, OutCond_REF, InEvap_REF, OutEvap_REF, outputs) = vchp()
                 if InEvap.m > 0.0:
-                    results = [outputs.COP_heating, InCond_REF.p, Y_h, InCond.T, OutCond.T, InCond.p, InCond.m, dTh, OutEvap_REF.p, Y_c, InEvap.T, OutEvap.T, InEvap.p, InEvap.m, dTc, outputs.DSH, inputs.DSC, inputs.comp_eff, r]
-                    if inputs.layout == 'ihx':
-                        results.append(inputs.ihx_eff)
-                        results.append(inputs.ihx_hot_dp)
-                        results.append(inputs.ihx_cold_dp)
-                    results_mat.append(results)
+                    COP_bal = (OutCond.h - InCond.h)*InCond.m/((OutCond.h - InCond.h)*InCond.m - (InEvap.h - OutEvap.h)*InEvap.m)
+                    COP_err = abs(outputs.COP_heating - COP_bal)/COP_bal
+                    if 0.0 < COP_err < 0.01:
+                        results = [outputs.COP_heating, InCond_REF.p, Y_h, InCond.T, OutCond.T, InCond.p, InCond.m, dTh, inputs.cond_dp, OutEvap_REF.p, Y_c, InEvap.T, OutEvap.T, InEvap.p, InEvap.m, dTc, inputs.evap_dp, outputs.DSH, inputs.DSC, inputs.comp_eff, r, COP_bal, COP_err]
+                        if inputs.layout == 'ihx':
+                            results.append(inputs.ihx_eff)
+                            results.append(inputs.ihx_hot_dp)
+                            results.append(inputs.ihx_cold_dp)
+                        results_mat.append(results)
             except:
                 a = 0
                 
         print('반복계산회수: %d'%(i))
         if not os.path.exists(file_name):    
-            column_list = ['COP','Pcond','fluid_h','Thi','Tho','Ph','mh','dTh','Pevap','fluid_c','Tci','Tco','Pc','mc','dTc','DSH','DSC','comp_eff','Refrigerant']
+            column_list = ['COP','Pcond','fluid_h','Thi','Tho','Ph','mh','dTh','dPh','Pevap','fluid_c','Tci','Tco','Pc','mc','dTc','dPc','DSH','DSC','comp_eff','Refrigerant','COP_bal','COP_err']
             if inputs.layout == 'ihx':
                 column_list.append('ihx_eff')
                 column_list.append('ihx_hot_dp')
@@ -137,3 +140,4 @@ for j in range(2):
         else:
             df = pd.DataFrame(results_mat)
             df.to_csv(file_name, index=False, mode='a', encoding='utf-8-sig', header=False)
+    end = time.time()
